@@ -6,12 +6,14 @@ Run with: uvicorn main:app --reload --port 8000
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 import sqlite3
 from contextlib import contextmanager
 
 from score_engine import calculate_devscore
 from qubic_client import QubicClient
+from github_integration import GitHubClient, get_github_activity_for_user
+from llm_refiner import LLMRefiner, enhance_github_activity
 
 app = FastAPI(
     title="DevScore API",
@@ -96,6 +98,16 @@ class DashboardResponse(BaseModel):
     current_score: int
     activity: ActivityData
     nft_token_id: Optional[str]
+
+class GitHubConnectRequest(BaseModel):
+    wallet_address: str
+    github_username: str
+
+class GitHubActivityResponse(BaseModel):
+    username: str
+    activity: Dict[str, Any]
+    summary: Dict[str, Any]
+    refined: Optional[Dict[str, Any]] = None
 
 # API Endpoints
 
@@ -273,6 +285,166 @@ async def get_leaderboard(limit: int = 10):
                 for idx, user in enumerate(users)
             ]
         }
+
+# GitHub Integration Endpoints
+
+@app.post("/api/github/connect")
+async def connect_github(request: GitHubConnectRequest):
+    """Connect a wallet to a GitHub account."""
+    try:
+        # Validate GitHub username
+        github_client = GitHubClient()
+        user_info = await github_client.get_user_info(request.github_username)
+        
+        with get_db() as conn:
+            # Update or insert user
+            existing_user = conn.execute(
+                "SELECT id FROM users WHERE wallet_address = ?",
+                (request.wallet_address,)
+            ).fetchone()
+            
+            if existing_user:
+                conn.execute(
+                    "UPDATE users SET github_username = ?, updated_at = CURRENT_TIMESTAMP WHERE wallet_address = ?",
+                    (request.github_username, request.wallet_address)
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO users (wallet_address, github_username) VALUES (?, ?)",
+                    (request.wallet_address, request.github_username)
+                )
+            conn.commit()
+        
+        return {
+            "success": True,
+            "message": f"GitHub account '{request.github_username}' connected successfully",
+            "github_username": request.github_username,
+            "github_url": user_info.get("html_url"),
+            "avatar_url": user_info.get("avatar_url")
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to connect GitHub account: {str(e)}"
+        )
+
+@app.get("/api/github/activity/{github_username}")
+async def get_github_activity(github_username: str, days: int = 30, refine: bool = True):
+    """
+    Fetch and optionally refine GitHub activity for a user.
+    
+    Args:
+        github_username: GitHub username
+        days: Number of days to look back (default: 30)
+        refine: Whether to use LLM to refine the activity data (default: True)
+    """
+    try:
+        # Fetch raw GitHub activity
+        activity_data = await get_github_activity_for_user(github_username, days)
+        
+        # Optionally enhance with LLM
+        if refine:
+            enhanced_data = await enhance_github_activity(activity_data)
+            return enhanced_data
+        
+        return activity_data
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to fetch GitHub activity: {str(e)}"
+        )
+
+@app.post("/api/github/sync-score/{wallet_address}")
+async def sync_github_score(wallet_address: str):
+    """
+    Sync GitHub activity and update DevScore for a wallet.
+    """
+    try:
+        with get_db() as conn:
+            user = conn.execute(
+                "SELECT github_username FROM users WHERE wallet_address = ?",
+                (wallet_address,)
+            ).fetchone()
+            
+            if not user or not user["github_username"]:
+                raise HTTPException(
+                    status_code=404,
+                    detail="User not found or GitHub account not connected"
+                )
+            
+            github_username = user["github_username"]
+        
+        # Fetch GitHub activity
+        activity_data = await get_github_activity_for_user(github_username, 30)
+        summary = activity_data.get("summary", {})
+        
+        # Calculate score from activity
+        score = calculate_devscore(
+            commits=summary.get("total_commits", 0),
+            pull_requests=summary.get("total_prs", 0),
+            issues=summary.get("total_issues", 0),
+            discord_messages=0  # Can be integrated later
+        )
+        
+        # Store activity in database
+        with get_db() as conn:
+            user_record = conn.execute(
+                "SELECT id FROM users WHERE wallet_address = ?",
+                (wallet_address,)
+            ).fetchone()
+            
+            if user_record:
+                conn.execute(
+                    """INSERT INTO activity_history 
+                       (user_id, commits, pull_requests, issues, discord_messages, calculated_score)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (user_record["id"], summary.get("total_commits", 0), 
+                     summary.get("total_prs", 0), summary.get("total_issues", 0), 
+                     0, score)
+                )
+                conn.execute(
+                    "UPDATE users SET current_score = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (score, user_record["id"])
+                )
+                conn.commit()
+        
+        # Enhance with LLM insights
+        enhanced_data = await enhance_github_activity(activity_data)
+        
+        return {
+            "success": True,
+            "wallet_address": wallet_address,
+            "github_username": github_username,
+            "score": score,
+            "activity_summary": summary,
+            "refined_insights": enhanced_data.get("refined", {}),
+            "timestamp": activity_data.get("summary", {}).get("time_period")
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to sync GitHub score: {str(e)}"
+        )
+
+@app.get("/api/github/check/{wallet_address}")
+async def check_github_connection(wallet_address: str):
+    """Check if a wallet has a connected GitHub account."""
+    with get_db() as conn:
+        user = conn.execute(
+            "SELECT github_username FROM users WHERE wallet_address = ?",
+            (wallet_address,)
+        ).fetchone()
+        
+        if not user:
+            return {"connected": False}
+        
+        return {
+            "connected": user["github_username"] is not None,
+            "github_username": user["github_username"]
+        }
+
 
 # Initialize database on startup
 @app.on_event("startup")

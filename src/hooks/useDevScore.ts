@@ -1,11 +1,38 @@
 import { useState, useCallback } from "react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface Activity {
   commits: number;
   pullRequests: number;
   issues: number;
   discordMessages: number;
+}
+
+interface GitHubSummary {
+  total_commits: number;
+  total_prs: number;
+  total_issues: number;
+  public_repos: number;
+  total_stars: number;
+  time_period: string;
+}
+
+interface RefinedInsights {
+  description?: string;
+  summary?: string;
+  insights?: string[];
+  recommendation?: string;
+  languages_used?: string[];
+  top_projects?: Array<{ name: string; stars: number; forks?: number; description?: string }>;
+  contribution_areas?: string[];
+  development_style?: string;
+  technical_skills?: string;
+  top_contributions?: string;
+  development_patterns?: string[];
+  impact?: string;
+  recommendations?: string;
+  expertise_areas?: string;
+  llm_enabled?: boolean;
 }
 
 interface DevScoreState {
@@ -18,20 +45,9 @@ interface DevScoreState {
     tokenId: string;
     mintedAt: string;
   } | null;
+  githubUsername?: string;
+  refinedInsights?: RefinedInsights;
 }
-
-// Mock API functions - replace with actual backend calls
-const fetchActivityFromBackend = async (): Promise<Activity> => {
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  
-  return {
-    commits: Math.floor(Math.random() * 200) + 50,
-    pullRequests: Math.floor(Math.random() * 50) + 10,
-    issues: Math.floor(Math.random() * 30) + 5,
-    discordMessages: Math.floor(Math.random() * 500) + 100,
-  };
-};
 
 const calculateScore = (activity: Activity): number => {
   // Score calculation algorithm
@@ -66,41 +82,100 @@ export const useDevScore = () => {
     nftData: null,
   });
 
-  const fetchActivity = useCallback(async () => {
+  const fetchActivity = useCallback(async (githubUsername?: string) => {
+    if (!githubUsername) {
+      toast.error("GitHub username is required");
+      return;
+    }
+
     setState((prev) => ({ ...prev, isLoading: true }));
 
     try {
-      const activity = await fetchActivityFromBackend();
+      // Fetch from backend GitHub integration
+      const response = await fetch(
+        `http://localhost:8000/api/github/activity/${githubUsername}?refine=true`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch GitHub activity");
+      }
+
+      const data = await response.json();
+      const summary = data.summary || {};
+
+      const activity: Activity = {
+        commits: summary.total_commits || 0,
+        pullRequests: summary.total_prs || 0,
+        issues: summary.total_issues || 0,
+        discordMessages: 0,
+      };
+
       const score = calculateScore(activity);
+      const refined = data.refined || {};
 
       setState((prev) => ({
         ...prev,
         activity,
         score,
         isLoading: false,
+        githubUsername,
+        refinedInsights: refined,
       }));
 
-      toast({
-        title: "Activity Synced",
-        description: `Fetched ${activity.commits} commits, ${activity.pullRequests} PRs, and more!`,
-      });
+      toast.success(
+        `Activity synced! ${activity.commits} commits, ${activity.pullRequests} PRs`
+      );
     } catch (error) {
       setState((prev) => ({ ...prev, isLoading: false }));
-      toast({
-        title: "Sync Failed",
-        description: "Failed to fetch activity. Please try again.",
-        variant: "destructive",
-      });
+      const message = error instanceof Error ? error.message : "Failed to fetch activity";
+      toast.error(message);
+    }
+  }, []);
+
+  const syncFromWallet = useCallback(async (walletAddress: string) => {
+    setState((prev) => ({ ...prev, isLoading: true }));
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/github/sync-score/${walletAddress}`,
+        { method: "POST" }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to sync score");
+      }
+
+      const data = await response.json();
+      const score = data.score || 0;
+      const summary = data.activity_summary || {};
+
+      const activity: Activity = {
+        commits: summary.total_commits || 0,
+        pullRequests: summary.total_prs || 0,
+        issues: summary.total_issues || 0,
+        discordMessages: 0,
+      };
+
+      setState((prev) => ({
+        ...prev,
+        activity,
+        score,
+        isLoading: false,
+        githubUsername: data.github_username,
+        refinedInsights: data.refined_insights || {},
+      }));
+
+      toast.success("DevScore updated from GitHub!");
+    } catch (error) {
+      setState((prev) => ({ ...prev, isLoading: false }));
+      const message = error instanceof Error ? error.message : "Failed to sync score";
+      toast.error(message);
     }
   }, []);
 
   const mint = useCallback(async () => {
     if (state.score === 0) {
-      toast({
-        title: "No Score",
-        description: "Please fetch your activity first.",
-        variant: "destructive",
-      });
+      toast.error("Please fetch your GitHub activity first");
       return;
     }
 
@@ -119,23 +194,19 @@ export const useDevScore = () => {
         },
       }));
 
-      toast({
-        title: "NFT Minted! 🎉",
-        description: `Your DevScore NFT #${tokenId} has been minted on Qubic Testnet.`,
-      });
+      toast.success(
+        `NFT Minted! Your DevScore NFT #${tokenId} is on Qubic Testnet`
+      );
     } catch (error) {
       setState((prev) => ({ ...prev, isMinting: false }));
-      toast({
-        title: "Minting Failed",
-        description: "Failed to mint NFT. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("Failed to mint NFT. Please try again.");
     }
   }, [state.score, state.activity]);
 
   return {
     ...state,
     fetchActivity,
+    syncFromWallet,
     mint,
   };
 };

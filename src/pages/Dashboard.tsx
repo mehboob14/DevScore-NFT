@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { GitCommit, GitPullRequest, AlertCircle, MessageCircle, RefreshCw } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import Sidebar from "@/components/layout/Sidebar";
@@ -6,6 +6,7 @@ import StatCard from "@/components/cards/StatCard";
 import ScoreCard from "@/components/cards/ScoreCard";
 import ActivityCard from "@/components/cards/ActivityCard";
 import NFTCard from "@/components/cards/NFTCard";
+import { GitHubConnect } from "@/components/GitHubConnect";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/hooks/useWallet";
 import { useDevScore } from "@/hooks/useDevScore";
@@ -13,19 +14,47 @@ import { useDevScore } from "@/hooks/useDevScore";
 const Dashboard = () => {
   const wallet = useWallet();
   const devScore = useDevScore();
+  const [githubConnected, setGithubConnected] = useState(false);
+  const [connectedUsername, setConnectedUsername] = useState("");
 
-  // Mock recent activities
-  const githubActivities = [
-    { type: "commit", title: "feat: Add user authentication", timestamp: "2 hours ago", points: 10 },
-    { type: "pr", title: "Fix: Resolve memory leak in worker", timestamp: "5 hours ago", points: 25 },
-    { type: "issue", title: "Bug: Login fails on Safari", timestamp: "1 day ago", points: 15 },
-  ];
+  // Check GitHub connection on mount
+  useEffect(() => {
+    const checkConnection = async () => {
+      if (!wallet.address) return;
+      try {
+        const response = await fetch(
+          `http://localhost:8000/api/github/check/${wallet.address}`
+        );
+        const data = await response.json();
+        if (data.connected) {
+          setGithubConnected(true);
+          setConnectedUsername(data.github_username);
+        }
+      } catch (err) {
+        console.error("Error checking GitHub connection:", err);
+      }
+    };
 
-  const discordActivities = [
-    { type: "message", title: "Helped user with API integration", timestamp: "3 hours ago", points: 5 },
-    { type: "message", title: "Answered question about hooks", timestamp: "6 hours ago", points: 5 },
-    { type: "message", title: "Shared code snippet", timestamp: "1 day ago", points: 3 },
-  ];
+    checkConnection();
+  }, [wallet.address]);
+
+  const handleGitHubConnected = (username: string) => {
+    setGithubConnected(true);
+    setConnectedUsername(username);
+  };
+
+  const handleGitHubDisconnected = () => {
+    setGithubConnected(false);
+    setConnectedUsername("");
+  };
+
+  const handleSyncActivity = () => {
+    if (githubConnected && connectedUsername) {
+      devScore.fetchActivity(connectedUsername);
+    } else {
+      devScore.syncFromWallet(wallet.address || "");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -51,7 +80,7 @@ const Dashboard = () => {
               </div>
               <Button
                 variant="glow"
-                onClick={devScore.fetchActivity}
+                onClick={handleSyncActivity}
                 disabled={devScore.isLoading || !wallet.isConnected}
               >
                 {devScore.isLoading ? (
@@ -84,6 +113,91 @@ const Dashboard = () => {
               </div>
             ) : (
               <>
+                {/* GitHub Connection Section */}
+                <div className="mb-8">
+                  <GitHubConnect
+                    walletAddress={wallet.address || ""}
+                    onConnected={handleGitHubConnected}
+                    onDisconnected={handleGitHubDisconnected}
+                  />
+                </div>
+
+                {/* Refined Insights Section */}
+                {devScore.refinedInsights && (devScore.refinedInsights.llm_enabled || devScore.refinedInsights.languages_used) && (
+                  <div className="mb-8 glass-card p-6">
+                    <h2 className="text-xl font-semibold mb-4">AI-Powered Profile Analysis</h2>
+                    <div className="space-y-6">
+                      {devScore.refinedInsights.description && (
+                        <div>
+                          <p className="text-sm text-muted-foreground mb-2">Activity Summary</p>
+                          <p className="text-base">{devScore.refinedInsights.description}</p>
+                        </div>
+                      )}
+                      
+                      {devScore.refinedInsights.languages_used && devScore.refinedInsights.languages_used.length > 0 && (
+                        <div className="pt-4 border-t">
+                          <p className="text-sm text-muted-foreground mb-3">Programming Languages</p>
+                          <div className="flex flex-wrap gap-2">
+                            {devScore.refinedInsights.languages_used.map((lang: string, idx: number) => (
+                              <span key={idx} className="px-3 py-1 rounded-full bg-primary/20 text-primary text-sm">
+                                {lang}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {devScore.refinedInsights.contribution_areas && devScore.refinedInsights.contribution_areas.length > 0 && (
+                        <div className="pt-4 border-t">
+                          <p className="text-sm text-muted-foreground mb-3">Expertise Areas</p>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {devScore.refinedInsights.contribution_areas.map((area: string, idx: number) => (
+                              <div key={idx} className="p-2 rounded bg-secondary/50 text-sm">
+                                ✓ {area}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {devScore.refinedInsights.top_projects && devScore.refinedInsights.top_projects.length > 0 && (
+                        <div className="pt-4 border-t">
+                          <p className="text-sm text-muted-foreground mb-3">Top Projects</p>
+                          <div className="space-y-2">
+                            {devScore.refinedInsights.top_projects.slice(0, 5).map((project: any, idx: number) => (
+                              <div key={idx} className="p-2 rounded bg-secondary/50 text-sm flex justify-between items-center">
+                                <span className="font-medium">{project.name}</span>
+                                <span className="text-xs text-muted-foreground">⭐ {project.stars}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {devScore.refinedInsights.development_style && (
+                        <div className="pt-4 border-t">
+                          <p className="text-sm text-muted-foreground mb-2">Development Style</p>
+                          <p className="text-base italic">{devScore.refinedInsights.development_style}</p>
+                        </div>
+                      )}
+                      
+                      {devScore.refinedInsights.insights && devScore.refinedInsights.insights.length > 0 && (
+                        <div className="pt-4 border-t">
+                          <p className="text-sm text-muted-foreground mb-3">Key Insights</p>
+                          <ul className="space-y-2">
+                            {devScore.refinedInsights.insights.map((insight: string, idx: number) => (
+                              <li key={idx} className="flex gap-2">
+                                <span className="text-primary">•</span>
+                                <span className="text-sm">{insight}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                   <StatCard
@@ -130,16 +244,32 @@ const Dashboard = () => {
                       hasMinted={devScore.hasMinted}
                     />
                   </div>
-                  <div className="lg:col-span-2 grid md:grid-cols-2 gap-6">
+                  <div className="lg:col-span-2">
                     <ActivityCard
                       title="GitHub Activity"
                       icon={GitCommit}
-                      activities={githubActivities}
-                    />
-                    <ActivityCard
-                      title="Discord Activity"
-                      icon={MessageCircle}
-                      activities={discordActivities}
+                      activities={githubConnected && devScore.activity.commits > 0 ? [
+                        { 
+                          type: "commit", 
+                          title: `${devScore.activity.commits} commits tracked`, 
+                          timestamp: "Latest sync",
+                          points: devScore.activity.commits * 2
+                        },
+                        { 
+                          type: "pr", 
+                          title: `${devScore.activity.pullRequests} pull requests`, 
+                          timestamp: "This month",
+                          points: devScore.activity.pullRequests * 5
+                        },
+                        { 
+                          type: "issue", 
+                          title: `${devScore.activity.issues} issues resolved`, 
+                          timestamp: "This month",
+                          points: devScore.activity.issues * 3
+                        },
+                      ] : [
+                        { type: "commit", title: "Connect GitHub to see activity", timestamp: "—", points: 0 },
+                      ]}
                     />
                   </div>
                 </div>

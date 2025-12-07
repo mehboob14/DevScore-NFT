@@ -1,0 +1,78 @@
+# 🚀 Quick Start Guide
+
+## TL;DR - Run Everything in 10 Seconds
+
+**Windows:** Double-click `run-dev.bat`  
+**PowerShell:** `.\run-dev.ps1`
+
+That's it! Both servers will start automatically.
+
+---
+
+## Manual Start (If You Prefer)
+
+### Terminal 1: Backend
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+uvicorn main:app --reload --port 8000
+```
+
+### Terminal 2: Frontend
+```powershell
+npm run dev
+```
+
+---
+
+## URLs
+- Frontend: http://localhost:8080
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
+---
+
+## What's Installed
+
+✅ **Frontend**: React, TypeScript, Vite, Tailwind, shadcn/ui, Supabase  
+✅ **Backend**: FastAPI, Uvicorn, Pydantic, Security libs  
+✅ **Virtual Environment**: Python 3.11 venv ready to go  
+✅ **Environment**: .env configured with Supabase keys  
+
+---
+
+## Common Commands
+
+| Task | Command |
+|------|---------|
+| Start dev servers | `.\run-dev.bat` or `.\run-dev.ps1` |
+| Build frontend | `npm run build` |
+| Lint frontend | `npm run lint` |
+| Test backend | `cd backend && pytest` |
+| Format Python code | `cd backend && black .` |
+
+---
+
+## Troubleshooting
+
+**Backend not starting?**
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+**Frontend won't start?**
+```powershell
+npm install
+npm run dev
+```
+
+**Port in use?**
+- Change frontend port in `vite.config.ts`
+- Change backend port in command: `uvicorn main:app --port 8001`
+
+---
+
+📖 See `SETUP.md` for detailed documentation  
+📊 See `INSTALLATION_STATUS.md` for full package details
