@@ -83,7 +83,39 @@ devscope/
 └── README.md
 ```
 
-## API Endpoints
+## Architecture Diagrams
+
+### System Architecture Overview
+![System Architecture](./architecture_diagrams/WhatsApp%20Image%202025-12-07%20at%207.43.41%20PM.jpeg)
+
+### GitHub Integration Flow
+![GitHub Integration](./architecture_diagrams/WhatsApp%20Image%202025-12-07%20at%207.44.04%20PM.jpeg)
+
+### Score Calculation Engine
+![Score Calculation](./architecture_diagrams/WhatsApp%20Image%202025-12-07%20at%207.44.29%20PM.jpeg)
+
+### Frontend Components Architecture
+![Frontend Architecture](./architecture_diagrams/WhatsApp%20Image%202025-12-07%20at%207.44.50%20PM.jpeg)
+
+### Backend API Structure
+![Backend API](./architecture_diagrams/WhatsApp%20Image%202025-12-07%20at%207.44.50%20PM%20(1).jpeg)
+
+### Database Schema
+![Database Schema](./architecture_diagrams/WhatsApp%20Image%202025-12-07%20at%207.45.21%20PM.jpeg)
+
+### NFT Minting Flow
+![NFT Minting](./architecture_diagrams/WhatsApp%20Image%202025-12-07%20at%207.45.41%20PM.jpeg)
+
+### Discord Integration Pipeline
+![Discord Integration](./architecture_diagrams/WhatsApp%20Image%202025-12-07%20at%207.46.06%20PM.jpeg)
+
+### Data Flow Diagram
+![Data Flow](./architecture_diagrams/WhatsApp%20Image%202025-12-07%20at%207.46.37%20PM.jpeg)
+
+### Leaderboard System Architecture
+![Leaderboard System](./architecture_diagrams/WhatsApp%20Image%202025-12-07%20at%207.47.51%20PM.jpeg)
+
+
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
