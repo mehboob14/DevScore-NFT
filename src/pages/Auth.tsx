@@ -1,18 +1,65 @@
-import { SignIn, SignUp, useAuth } from '@clerk/clerk-react';
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
+import { Github } from 'lucide-react';
 
 const Auth = () => {
   const [isSignUp, setIsSignUp] = useState(false);
-  const { isSignedIn, isLoaded } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { user, isLoading, signIn, signUp, signInWithGitHub } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isLoaded && isSignedIn) {
+    if (!isLoading && user) {
       navigate('/dashboard');
     }
-  }, [isSignedIn, isLoaded, navigate]);
+  }, [user, isLoading, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      if (isSignUp) {
+        const { error } = await signUp(email, password);
+        if (error) {
+          toast.error(error.message);
+        } else {
+          toast.success('Account created! You can now sign in.');
+          setIsSignUp(false);
+        }
+      } else {
+        const { error } = await signIn(email, password);
+        if (error) {
+          toast.error(error.message);
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGithubSignIn = async () => {
+    const { error } = await signInWithGitHub();
+    if (error) {
+      toast.error(error.message);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -47,64 +94,56 @@ const Auth = () => {
             </p>
           </div>
 
-          {/* Clerk Component */}
-          <div className="clerk-wrapper">
-            {isSignUp ? (
-              <SignUp
-                routing="hash"
-                signInUrl="/auth"
-                redirectUrl="/dashboard"
-                appearance={{
-                  elements: {
-                    rootBox: 'w-full',
-                    card: 'bg-transparent shadow-none p-0 w-full',
-                    headerTitle: 'hidden',
-                    headerSubtitle: 'hidden',
-                    socialButtonsBlockButton: 'bg-secondary hover:bg-muted border border-border text-foreground transition-all duration-200',
-                    socialButtonsBlockButtonText: 'text-foreground font-medium',
-                    socialButtonsProviderIcon: 'w-5 h-5',
-                    dividerRow: 'my-4',
-                    dividerText: 'text-muted-foreground text-xs',
-                    dividerLine: 'bg-border',
-                    formFieldInput: 'bg-secondary border-border text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary',
-                    formFieldLabel: 'text-foreground text-sm font-medium',
-                    formButtonPrimary: 'bg-gradient-to-r from-primary to-[hsl(200,80%,60%)] text-primary-foreground font-semibold hover:opacity-90 transition-opacity',
-                    footerAction: 'hidden',
-                    identityPreview: 'bg-secondary border-border',
-                    identityPreviewText: 'text-foreground',
-                    identityPreviewEditButton: 'text-primary hover:text-primary/80',
-                  },
-                }}
-              />
-            ) : (
-              <SignIn
-                routing="hash"
-                signUpUrl="/auth"
-                redirectUrl="/dashboard"
-                appearance={{
-                  elements: {
-                    rootBox: 'w-full',
-                    card: 'bg-transparent shadow-none p-0 w-full',
-                    headerTitle: 'hidden',
-                    headerSubtitle: 'hidden',
-                    socialButtonsBlockButton: 'bg-secondary hover:bg-muted border border-border text-foreground transition-all duration-200',
-                    socialButtonsBlockButtonText: 'text-foreground font-medium',
-                    socialButtonsProviderIcon: 'w-5 h-5',
-                    dividerRow: 'my-4',
-                    dividerText: 'text-muted-foreground text-xs',
-                    dividerLine: 'bg-border',
-                    formFieldInput: 'bg-secondary border-border text-foreground placeholder:text-muted-foreground focus:ring-primary focus:border-primary',
-                    formFieldLabel: 'text-foreground text-sm font-medium',
-                    formButtonPrimary: 'bg-gradient-to-r from-primary to-[hsl(200,80%,60%)] text-primary-foreground font-semibold hover:opacity-90 transition-opacity',
-                    footerAction: 'hidden',
-                    identityPreview: 'bg-secondary border-border',
-                    identityPreviewText: 'text-foreground',
-                    identityPreviewEditButton: 'text-primary hover:text-primary/80',
-                  },
-                }}
-              />
-            )}
+          {/* OAuth Buttons */}
+          <div className="space-y-3 mb-6">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleGithubSignIn}
+            >
+              <Github className="mr-2 h-4 w-4" />
+              Continue with GitHub
+            </Button>
           </div>
+
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+            </div>
+          </div>
+
+          {/* Email/Password Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
+            </Button>
+          </form>
 
           {/* Toggle Sign In/Up */}
           <p className="text-center text-sm text-muted-foreground mt-6">
