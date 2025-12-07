@@ -1,16 +1,37 @@
 import { ClerkProvider } from '@clerk/clerk-react';
 
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-
-if (!PUBLISHABLE_KEY) {
-  throw new Error('Missing Clerk Publishable Key');
-}
+// Your Clerk publishable key - this is safe to include in client code
+const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_YOUR_KEY_HERE';
 
 interface ClerkProviderWrapperProps {
   children: React.ReactNode;
 }
 
 const ClerkProviderWrapper = ({ children }: ClerkProviderWrapperProps) => {
+  // Show configuration message if key is not set
+  if (!PUBLISHABLE_KEY || PUBLISHABLE_KEY === 'pk_test_YOUR_KEY_HERE') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-md text-center space-y-4">
+          <h1 className="text-2xl font-bold text-foreground">Clerk Setup Required</h1>
+          <p className="text-muted-foreground">
+            To enable authentication, add your Clerk publishable key to the environment.
+          </p>
+          <div className="bg-card border border-border rounded-lg p-4 text-left">
+            <p className="text-sm text-muted-foreground mb-2">Add this to your secrets:</p>
+            <code className="text-xs text-primary">VITE_CLERK_PUBLISHABLE_KEY=pk_test_...</code>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Get your key from the{' '}
+            <a href="https://dashboard.clerk.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              Clerk Dashboard
+            </a>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <ClerkProvider
       publishableKey={PUBLISHABLE_KEY}
